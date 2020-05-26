@@ -1,9 +1,7 @@
-#-*- coding=utf-8 -*-
 import os
 import numpy as np
 import tensorflow as tf
 from signal import SIGINT, SIGTERM
-
 import lbtoolbox as lb
 from models import hccr_cnnnet
 
@@ -22,12 +20,12 @@ batch_size = 128
 img_size=[96,96]
 channels=1
 
-save_path='/.../.../checkpoint' #模型保存路径
-train_dir='/.../.../train'      #训练图片路径
-log_dir = '/.../.../log'        #日志保存路径
+save_path='/home/ubuntu/HCCR-HWDB-tensorflow/checkpoint' #path for model training checkpoint
+train_dir='/home/ubuntu/HCCR-HWDB-tensorflow/train'      #train data path, png file, preprocessed in M1 code
+log_dir = '/home/ubuntu/HCCR-HWDB-tensorflow/log'        #log data path
 
-aug=False #是否进行图像增强？
-resume=False #是否继续训练模型？
+aug=False #image argumentation
+resume=False #resume training using checkpointer files
 
 file_and_label=[]
 files=[]
@@ -56,7 +54,7 @@ def _parse_function(filename, label):
 for label_name in os.listdir(train_dir):
     for file_name in os.listdir(train_dir+'/'+label_name):
         file_and_label.append([label_name,train_dir + '/'+label_name+'/'+file_name])
-        
+
 file_and_label=np.array(file_and_label)
 np.random.shuffle(file_and_label)
 labels=list(map(int,file_and_label[:,0]))
@@ -65,7 +63,7 @@ files=list(file_and_label[:,1])
 files=tf.constant(files)
 labels=tf.constant(labels)
 
-dataset = tf.contrib.data.Dataset.from_tensor_slices((files, labels))
+dataset = tf.data.Dataset.from_tensor_slices((files, labels))
 dataset = dataset.map(_parse_function)
 dataset = dataset.shuffle(buffer_size=buffer_size).batch(batch_size).repeat()
 
@@ -99,7 +97,7 @@ train_step = tf.train.MomentumOptimizer(learning_rate=lr,momentum=momentum)
 with tf.control_dependencies(update_op):
     grads = train_step.compute_gradients(loss)
     train_op = train_step.apply_gradients(grads, global_step=global_step)
-    
+
 var_list = tf.trainable_variables()
 if global_step is not None:
     var_list.append(global_step)
@@ -123,7 +121,7 @@ with tf.Session() as sess:
 
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(sess=sess, coord=coord)
-    
+
     with lb.Uninterrupt(sigs=[SIGINT, SIGTERM], verbose=True) as u:
       for i in range(start_step,train_nums):
 
@@ -143,24 +141,23 @@ with tf.Session() as sess:
         if u.interrupted:
                     print("Interrupted on request...")
                     break
-                    
-    '''              
+
+    '''
     file1=open(log_dir+'/loss.txt','a')
     for loss in losslist:
           loss = str(loss).strip('[').strip(']').replace(',','')
           file1.write(loss+'\n')
     file1.close()
-            
     file2=open(log_dir+'/accu.txt','a')
     for acc in accuracy:
           acc = str(acc).strip('[').strip(']').replace(',','')
           file2.write(acc+'\n')
     file2.close()
     '''
-    
+
     model_name="trainnum_%d_"%train_nums
     saver.save(sess,os.path.join(save_path,model_name),global_step=global_step)
-    print('Train finished...')        
-         
+    print('Train finished...')
+
     coord.request_stop()
     coord.join(threads)
